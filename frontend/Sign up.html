@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Account — PocketWise AI</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div class="auth-page">
+      <div class="auth-card">
+        <div class="auth-hero">
+          <div class="brand">
+            <div class="brand-mark">💼</div>
+            <div>
+              <div class="brand-name">PocketWise <span>AI</span></div>
+              <div class="brand-tag">Your AI Financial Coach</div>
+            </div>
+          </div>
+          <h1>Create Account</h1>
+          <p>Join PocketWise AI today and start understanding your money.</p>
+        </div>
+
+        <div class="auth-body">
+          <!-- Sign UP FORM -->
+          <form id="signup-form">
+            <div class="field">
+              <label for="fullname">Full Name</label>
+              <div class="field-input">
+                <span class="field-icon">👤</span>
+                <input
+                  type="text"
+                  id="fullname"
+                  placeholder="Enter your full name"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="email">Email</label>
+              <div class="field-input">
+                <span class="field-icon">✉️</span>
+                <input
+                  type="email"
+                  id="email"
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="password">Password</label>
+              <div class="field-input">
+                <span class="field-icon">🔒</span>
+                <input
+                  type="password"
+                  id="password"
+                  placeholder="Create a password"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="confirm">Confirm Password</label>
+              <div class="field-input">
+                <span class="field-icon">🔒</span>
+                <input
+                  type="password"
+                  id="confirm"
+                  placeholder="Confirm your password"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">
+              Sign Up
+            </button>
+          </form>
+
+          <div class="auth-foot">
+            Already have an account? <a href="login.html">Login</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Form Verification -->
+    <script>
+      document.getElementById("signup-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const password = document.getElementById("password").value;
+        const confirm = document.getElementById("confirm").value;
+        if (password !== confirm) {
+          alert("Passwords don't match — please check and try again.");
+          return;
+        }
+        // Demo-only: goes straight to dashboard, no real account creation.
+        window.location.href = "dashboard.html";
+      });
+    </script>
+  </body>
+</html>
