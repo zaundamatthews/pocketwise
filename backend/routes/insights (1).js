@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
 const OpenAI = require('openai');
+const { generateRuleBasedInsights } = require('../services/ruleBasedEngine');
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const SYSTEM_PROMPT = `You are a friendly, practical financial coach for someone in Malawi.
@@ -37,18 +38,24 @@ router.post('/generate', async (req, res) => {
 
     const summary = summarizeTransactions(transactions);
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.4,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(summary) },
-      ],
-    });
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.4,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: JSON.stringify(summary) },
+        ],
+      });
 
-    const aiText = completion.choices[0].message.content;
-    const parsed = parseAiResponse(aiText);
-    res.json(parsed);
+      const aiText = completion.choices[0].message.content;
+      const parsed = parseAiResponse(aiText);
+      return res.json({ ...parsed, source: 'ai' });
+    } catch (aiErr) {
+      console.error("OpenAI call failed, falling back to rule-based engine:", aiErr.message);
+      const fallbackInsights = generateRuleBasedInsights(summary);
+      return res.json({ ...fallbackInsights, source: 'rule-based' });
+    }
   } catch (err) {
     console.error("insights/generate error:", err.message);
     res.status(500).json({ error: err.message });
@@ -59,15 +66,22 @@ function summarizeTransactions(transactions) {
   const byCategory = {};
   const byWeek = {};
   const byDayOfWeek = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+  const categoryCountByDate = {};
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   let totalSpent = 0;
+  let totalIncome = 0;
   let expenseCount = 0;
 
   transactions.forEach(t => {
+    const amount = Number(t.amount) || 0;
+
+    if (t.type === 'income') {
+      totalIncome += amount;
+      return;
+    }
     if (t.type !== 'expense') return;
 
-    const amount = Number(t.amount) || 0;
     const category = t.category || 'Uncategorized';
     const date = new Date(t.date);
 
@@ -80,6 +94,10 @@ function summarizeTransactions(transactions) {
 
     const dayName = DAY_NAMES[date.getDay()];
     byDayOfWeek[dayName] += amount;
+
+    const dateKey = isNaN(date.getTime()) ? 'unknown-date' : date.toISOString().slice(0, 10);
+    if (!categoryCountByDate[dateKey]) categoryCountByDate[dateKey] = {};
+    categoryCountByDate[dateKey][category] = (categoryCountByDate[dateKey][category] || 0) + 1;
 
     totalSpent += amount;
     expenseCount += 1;
@@ -95,15 +113,34 @@ function summarizeTransactions(transactions) {
   const topCategory = topKey(byCategory);
   const topDay = topKey(byDayOfWeek);
 
+  const spendingRatio = totalIncome > 0 ? round1(totalSpent / totalIncome) : null;
+  const savingsRate = totalIncome > 0 ? round1((totalIncome - totalSpent) / totalIncome) : null;
+
+  let maxSameCategoryInOneDay = 0;
+  let maxSameCategoryInOneDayCategory = null;
+  Object.values(categoryCountByDate).forEach(counts => {
+    Object.entries(counts).forEach(([cat, count]) => {
+      if (count > maxSameCategoryInOneDay) {
+        maxSameCategoryInOneDay = count;
+        maxSameCategoryInOneDayCategory = cat;
+      }
+    });
+  });
+
   return {
     totalTransactions: transactions.length,
     expenseTransactionCount: expenseCount,
     totalSpent: round1(totalSpent),
+    totalIncome: round1(totalIncome),
+    spendingRatio,
+    savingsRate,
     byCategory,
     byWeek,
     byDayOfWeek,
     topCategory,
     topSpendingDay: topDay,
+    maxSameCategoryInOneDay,
+    maxSameCategoryInOneDayCategory,
   };
 }
 
