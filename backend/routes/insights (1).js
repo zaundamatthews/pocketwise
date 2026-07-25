@@ -3,6 +3,7 @@ const router = express.Router();
 const Transaction = require('../models/Transaction');
 const OpenAI = require('openai');
 const { generateRuleBasedInsights } = require('../services/ruleBasedEngine');
+const { withRetry } = require('../utils/withRetry');
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const SYSTEM_PROMPT = `You are a friendly, practical financial coach for someone in Malawi.
@@ -39,26 +40,37 @@ router.post('/generate', async (req, res) => {
     const summary = summarizeTransactions(transactions);
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0.4,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify(summary) },
-        ],
-      });
+      const completion = await withRetry(
+        () => openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: JSON.stringify(summary) },
+          ],
+        }),
+        { retries: 2, baseDelayMs: 300, timeoutMs: 8000, label: 'OpenAI insights call' }
+      );
 
       const aiText = completion.choices[0].message.content;
       const parsed = parseAiResponse(aiText);
       return res.json({ ...parsed, source: 'ai' });
     } catch (aiErr) {
-      console.error("OpenAI call failed, falling back to rule-based engine:", aiErr.message);
+      console.error("OpenAI call failed after retries, falling back to rule-based engine:", aiErr.message);
       const fallbackInsights = generateRuleBasedInsights(summary);
-      return res.json({ ...fallbackInsights, source: 'rule-based' });
+      return res.json({ ...fallbackInsights, source: fallbackInsights.source || 'rule-based' });
     }
   } catch (err) {
-    console.error("insights/generate error:", err.message);
-    res.status(500).json({ error: err.message });
+    // Absolute last resort: even Transaction.find(), summarizeTransactions,
+    // or the fallback engine itself failed. Never let the endpoint 500 —
+    // always return something the frontend can render.
+    console.error("insights/generate: unrecoverable error, returning static safe response:", err.message);
+    res.status(200).json({
+      summary: "We're having trouble generating insights right now.",
+      explanation: "This won't affect your saved transactions — please try again shortly.",
+      tips: ["Try refreshing in a moment.", "Your transaction history is safe and unaffected."],
+      source: 'static-safe-response',
+    });
   }
 });
 
