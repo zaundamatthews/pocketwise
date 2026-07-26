@@ -4,6 +4,9 @@ const Transaction = require('../models/Transaction');
 const OpenAI = require('openai');
 const { generateRuleBasedInsights } = require('../services/ruleBasedEngine');
 const { withRetry } = require('../utils/withRetry');
+const { sanitizeTransactions } = require('../utils/sanitize');
+const cache = require('../utils/cache');
+const logger = require('../utils/logger');
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const SYSTEM_PROMPT = `You are a friendly, practical financial coach for someone in Malawi.
@@ -26,18 +29,31 @@ Rules:
 - Tone: encouraging, not judgmental.`;
 
 router.post('/generate', async (req, res) => {
+  const startedAt = Date.now();
   try {
-    const transactions = await Transaction.find();
+    const rawTransactions = await Transaction.find();
 
-    if (!transactions || transactions.length === 0) {
-      return res.status(200).json({
+    if (!rawTransactions || rawTransactions.length === 0) {
+      const response = {
         summary: "No spending data yet.",
         explanation: "We don't have enough transactions to spot a pattern yet.",
         tips: ["Add a few transactions to get your first insight.", "Check back after your next few purchases."],
-      });
+        source: 'no-data',
+      };
+      logger.logInsightRequest({ source: response.source, latencyMs: Date.now() - startedAt });
+      return res.status(200).json(response);
     }
 
+    // Sanitize category names before anything touches the AI prompt —
+    // closes off prompt-injection via user-controlled category strings.
+    const transactions = sanitizeTransactions(rawTransactions);
     const summary = summarizeTransactions(transactions);
+
+    const cached = cache.get(summary);
+    if (cached) {
+      logger.logInsightRequest({ source: cached.source, latencyMs: Date.now() - startedAt, matchedRules: cached.matchedRules });
+      return res.json({ ...cached, cached: true });
+    }
 
     try {
       const completion = await withRetry(
@@ -54,17 +70,23 @@ router.post('/generate', async (req, res) => {
 
       const aiText = completion.choices[0].message.content;
       const parsed = parseAiResponse(aiText);
-      return res.json({ ...parsed, source: 'ai' });
+      const response = { ...parsed, source: 'ai' };
+      cache.set(summary, response);
+      logger.logInsightRequest({ source: 'ai', latencyMs: Date.now() - startedAt });
+      return res.json(response);
     } catch (aiErr) {
-      console.error("OpenAI call failed after retries, falling back to rule-based engine:", aiErr.message);
+      logger.error('openai_call_failed', { message: aiErr.message, latencyMs: Date.now() - startedAt });
       const fallbackInsights = generateRuleBasedInsights(summary);
-      return res.json({ ...fallbackInsights, source: fallbackInsights.source || 'rule-based' });
+      const response = { ...fallbackInsights, source: fallbackInsights.source || 'rule-based' };
+      cache.set(summary, response, 60 * 1000); // shorter TTL for fallback results
+      logger.logInsightRequest({ source: response.source, latencyMs: Date.now() - startedAt, matchedRules: fallbackInsights.matchedRules });
+      return res.json(response);
     }
   } catch (err) {
     // Absolute last resort: even Transaction.find(), summarizeTransactions,
     // or the fallback engine itself failed. Never let the endpoint 500 —
     // always return something the frontend can render.
-    console.error("insights/generate: unrecoverable error, returning static safe response:", err.message);
+    logger.error('insights_generate_unrecoverable', { message: err.message, latencyMs: Date.now() - startedAt });
     res.status(200).json({
       summary: "We're having trouble generating insights right now.",
       explanation: "This won't affect your saved transactions — please try again shortly.",
