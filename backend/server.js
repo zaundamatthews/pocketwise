@@ -28,7 +28,7 @@ app.get('/', (req, res)=> {
 // auth routes
 app.use('/api/auth', authRoutes);
 // transaction routes
-app.use('/api/', transactionRoutes)
+app.use('/api/transactions', transactionRoutes)
 
 async function startServer() {
     await connectDB();
