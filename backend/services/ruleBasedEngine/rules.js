@@ -1,5 +1,6 @@
 const { zScore, percentChange } = require('./statistics');
 const config = require('./config');
+const { formatMWK } = require('../../utils/formatCurrency');
 
 function getSortedWeekKeys(byWeek) {
   return Object.keys(byWeek).sort();
@@ -79,7 +80,7 @@ function weekOverWeekSurge(summary) {
     id: 'weekOverWeekSurge',
     score,
     summary: `Your spending jumped ${Math.round(change * 100)}% from last week.`,
-    explanation: `Total spending rose from MWK ${prevWeek} to MWK ${currWeek} week over week.`,
+    explanation: `Total spending rose from ${formatMWK(prevWeek)} to ${formatMWK(currWeek)} week over week.`,
     tip: 'Check what changed this week versus last to spot one-off vs recurring costs.',
   };
 }
@@ -127,7 +128,7 @@ function singleCategoryDominance(summary) {
     id: 'singleCategoryDominance',
     score,
     summary: `${summary.topCategory} dominates your spending.`,
-    explanation: `${summary.topCategory} makes up ${Math.round(ratio * 100)}% of your total spend (MWK ${topAmount} of MWK ${summary.totalSpent}).`,
+    explanation: `${summary.topCategory} makes up ${Math.round(ratio * 100)}% of your total spend (${formatMWK(topAmount)} of ${formatMWK(summary.totalSpent)}).`,
     tip: `Look for ways to diversify or trim spending in ${summary.topCategory}.`,
   };
 }
@@ -139,7 +140,7 @@ function topCategoryBaseline(summary) {
     id: 'topCategoryBaseline',
     score: 10,
     summary: `Your biggest spending category was ${summary.topCategory}.`,
-    explanation: `You spent MWK ${summary.byCategory[summary.topCategory]} on ${summary.topCategory}, more than any other category.`,
+    explanation: `You spent ${formatMWK(summary.byCategory[summary.topCategory])} on ${summary.topCategory}, more than any other category.`,
     tip: 'Check your top spending category and see if it matches your priorities.',
   };
 }
