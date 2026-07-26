@@ -639,3 +639,42 @@ button {
     grid-template-columns: 1fr;
   }
 }
+/* changing colour */
+/* colour sorrounding the card*/
+.main {
+  background: #094239; /* only this section's surrounding area changes */
+  padding: 26px 32px 60px;
+  max-width: 1180px;
+  width: 100%;
+}
+
+/* background images */
+/* dashboard background*/
+
+#view-dashboard{
+  background-image: url('../assets/images/dashboard-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed; /* optional, nice parallax feel */
+} 
+
+
+/* sidebar background */
+.sidebar {
+  position: relative;
+  background-image: url('../assets/images/sidebar-bg.jpg');
+  background-size: cover;
+  background-position: center;
+}
+.sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(11,61,46,0.92), rgba(8,43,32,0.92));
+  z-index: 0;
+}
+.sidebar > * {
+  position: relative;
+  z-index: 1;
+}
