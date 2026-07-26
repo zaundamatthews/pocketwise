@@ -88,7 +88,73 @@ async function deleteTransaction(req, res) {
         })
     }
 }
+async function updateTransaction(req, res) {
+    try {
+        const { id }  = req.params;
+
+        if(!mongoose.isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid transaction ID",
+            });
+        }
+
+        const allowedUpdates = [
+            "type",
+            "amount",
+            "category",
+            "description",
+            "date"
+        ];
+        const updates = {};
+
+        for(const field of allowedUpdates) {
+            if(req.body[field] !== undefined) {
+                updates[field] = req.body[field];
+            }
+        }
+
+        if(Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide at least one field to update",
+            });
+        }
+       
+        const transaction = await Transaction.findOneAndUpdate(
+            {
+                _id: id,
+                user: req.user._id,
+            },
+            updates,
+            {
+                new: true,
+                runValidators: true,
+            }
+        );
+
+        if(!transaction) {
+            return res.status(404).json({
+                success: false,
+                message: "Transaction not found",
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Transaction updated successfully",
+            transaction,
+        })
+    } catch (error) {
+        console.error("Update transaction error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to update transaction",
+        })
+    }
+}
 module.exports = {getTransactions,
                  addTransactions,
-                 deleteTransaction
+                 deleteTransaction,
+                 updateTransaction
                   }
