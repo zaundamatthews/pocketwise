@@ -19,6 +19,7 @@ app.get('/', (req, res)=> {
 });
 // auth routes
 app.use('/api/auth', authRoutes);
+app.use('/health', require('./routes/health'));
 
 async function startServer() {
     await connectDB();
