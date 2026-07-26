@@ -5,7 +5,7 @@ let trendChartInstance = null;
 
 const categoryColors = {
   'Food & Drinks': '#16a34a',
-  'Transport': '#3f6bb0'
+  'Transport': '#3f6bb0',
   'Accommodation': '#8b5cf6',
   'Education': '#e08a2e',
   'Entertainment': '#e0455b',
