@@ -471,6 +471,16 @@ button {
   color: var(--emerald);
   font-weight: 700;
 }
+.tx-delete-btn {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  opacity: 0.5;
+  padding: 4px;
+}
+.tx-delete-btn:hover {
+  opacity: 1;
+}
 
 /* AI Advice banner */
 .ai-banner {

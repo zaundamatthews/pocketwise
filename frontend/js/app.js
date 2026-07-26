@@ -107,7 +107,10 @@ function txRowHTML(t) {
           <div class="tx-date">${t.date}</div>
         </div>
       </div>
-      <div class="tx-amount ${t.type}">${sign}${formatMK(t.amount)}</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="tx-amount ${t.type}">${sign}${formatMK(t.amount)}</div>
+        <button class="tx-delete-btn" onclick="deleteTransaction('${t._id}')" title="Delete">🗑️</button>
+      </div>
     </div>
   `;
 }
@@ -116,6 +119,30 @@ function renderTransactionLists(transactions) {
   const sorted = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
   document.getElementById('recent-tx-list').innerHTML = sorted.slice(0, 5).map(txRowHTML).join('');
   document.getElementById('full-tx-list').innerHTML = sorted.map(txRowHTML).join('');
+}
+
+async function deleteTransaction(id) {
+  if (!confirm('Delete this transaction?')) return;
+
+  try {
+    const response = await fetch(`${API_BASE}/transactions/${id}`, {
+      method: 'DELETE',
+      headers: { ...authHeaders() },
+    });
+    if (response.status === 401) {
+      window.location.href = 'login.html';
+      return;
+    }
+    if (!response.ok) {
+      throw new Error('Unable to delete transaction');
+    }
+  } catch (error) {
+    console.error('Delete transaction error:', error);
+    alert(error.message);
+    return;
+  }
+
+  await init();
 }
 
 // ---------- Charts ----------

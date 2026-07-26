@@ -1,5 +1,5 @@
 
-const USE_MOCK_DATA = false;
+const USE_MOCK_DATA = true;
 const API_BASE = 'http://localhost:5000/api';
 
 let mockTransactions = [
