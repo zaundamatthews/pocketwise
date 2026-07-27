@@ -2,6 +2,11 @@ const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
 const OpenAI = require('openai');
+const { generateRuleBasedInsights } = require('../services/ruleBasedEngine');
+const { withRetry } = require('../utils/withRetry');
+const { sanitizeTransactions } = require('../utils/sanitize');
+const cache = require('../utils/cache');
+const logger = require('../utils/logger');
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const SYSTEM_PROMPT = `You are a friendly, practical financial coach for someone in Malawi.
@@ -24,34 +29,70 @@ Rules:
 - Tone: encouraging, not judgmental.`;
 
 router.post('/generate', async (req, res) => {
+  const startedAt = Date.now();
   try {
-    const transactions = await Transaction.find();
+    const rawTransactions = await Transaction.find();
 
-    if (!transactions || transactions.length === 0) {
-      return res.status(200).json({
+    if (!rawTransactions || rawTransactions.length === 0) {
+      const response = {
         summary: "No spending data yet.",
         explanation: "We don't have enough transactions to spot a pattern yet.",
         tips: ["Add a few transactions to get your first insight.", "Check back after your next few purchases."],
-      });
+        source: 'no-data',
+      };
+      logger.logInsightRequest({ source: response.source, latencyMs: Date.now() - startedAt });
+      return res.status(200).json(response);
     }
 
+    // Sanitize category names before anything touches the AI prompt —
+    // closes off prompt-injection via user-controlled category strings.
+    const transactions = sanitizeTransactions(rawTransactions);
     const summary = summarizeTransactions(transactions);
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.4,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: JSON.stringify(summary) },
-      ],
-    });
+    const cached = cache.get(summary);
+    if (cached) {
+      logger.logInsightRequest({ source: cached.source, latencyMs: Date.now() - startedAt, matchedRules: cached.matchedRules });
+      return res.json({ ...cached, cached: true });
+    }
 
-    const aiText = completion.choices[0].message.content;
-    const parsed = parseAiResponse(aiText);
-    res.json(parsed);
+    try {
+      const completion = await withRetry(
+        () => openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: JSON.stringify(summary) },
+          ],
+        }),
+        { retries: 2, baseDelayMs: 300, timeoutMs: 8000, label: 'OpenAI insights call' }
+      );
+
+      const aiText = completion.choices[0].message.content;
+      const parsed = parseAiResponse(aiText);
+      const response = { ...parsed, source: 'ai' };
+      cache.set(summary, response);
+      logger.logInsightRequest({ source: 'ai', latencyMs: Date.now() - startedAt });
+      return res.json(response);
+    } catch (aiErr) {
+      logger.error('openai_call_failed', { message: aiErr.message, latencyMs: Date.now() - startedAt });
+      const fallbackInsights = generateRuleBasedInsights(summary);
+      const response = { ...fallbackInsights, source: fallbackInsights.source || 'rule-based' };
+      cache.set(summary, response, 60 * 1000); // shorter TTL for fallback results
+      logger.logInsightRequest({ source: response.source, latencyMs: Date.now() - startedAt, matchedRules: fallbackInsights.matchedRules });
+      return res.json(response);
+    }
   } catch (err) {
-    console.error("insights/generate error:", err.message);
-    res.status(500).json({ error: err.message });
+    // Absolute last resort: even Transaction.find(), summarizeTransactions,
+    // or the fallback engine itself failed. Never let the endpoint 500 —
+    // always return something the frontend can render.
+    logger.error('insights_generate_unrecoverable', { message: err.message, latencyMs: Date.now() - startedAt });
+    res.status(200).json({
+      summary: "We're having trouble generating insights right now.",
+      explanation: "This won't affect your saved transactions — please try again shortly.",
+      tips: ["Try refreshing in a moment.", "Your transaction history is safe and unaffected."],
+      source: 'static-safe-response',
+    });
   }
 });
 
@@ -59,15 +100,22 @@ function summarizeTransactions(transactions) {
   const byCategory = {};
   const byWeek = {};
   const byDayOfWeek = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+  const categoryCountByDate = {};
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   let totalSpent = 0;
+  let totalIncome = 0;
   let expenseCount = 0;
 
   transactions.forEach(t => {
+    const amount = Number(t.amount) || 0;
+
+    if (t.type === 'income') {
+      totalIncome += amount;
+      return;
+    }
     if (t.type !== 'expense') return;
 
-    const amount = Number(t.amount) || 0;
     const category = t.category || 'Uncategorized';
     const date = new Date(t.date);
 
@@ -80,6 +128,10 @@ function summarizeTransactions(transactions) {
 
     const dayName = DAY_NAMES[date.getDay()];
     byDayOfWeek[dayName] += amount;
+
+    const dateKey = isNaN(date.getTime()) ? 'unknown-date' : date.toISOString().slice(0, 10);
+    if (!categoryCountByDate[dateKey]) categoryCountByDate[dateKey] = {};
+    categoryCountByDate[dateKey][category] = (categoryCountByDate[dateKey][category] || 0) + 1;
 
     totalSpent += amount;
     expenseCount += 1;
@@ -95,15 +147,34 @@ function summarizeTransactions(transactions) {
   const topCategory = topKey(byCategory);
   const topDay = topKey(byDayOfWeek);
 
+  const spendingRatio = totalIncome > 0 ? round1(totalSpent / totalIncome) : null;
+  const savingsRate = totalIncome > 0 ? round1((totalIncome - totalSpent) / totalIncome) : null;
+
+  let maxSameCategoryInOneDay = 0;
+  let maxSameCategoryInOneDayCategory = null;
+  Object.values(categoryCountByDate).forEach(counts => {
+    Object.entries(counts).forEach(([cat, count]) => {
+      if (count > maxSameCategoryInOneDay) {
+        maxSameCategoryInOneDay = count;
+        maxSameCategoryInOneDayCategory = cat;
+      }
+    });
+  });
+
   return {
     totalTransactions: transactions.length,
     expenseTransactionCount: expenseCount,
     totalSpent: round1(totalSpent),
+    totalIncome: round1(totalIncome),
+    spendingRatio,
+    savingsRate,
     byCategory,
     byWeek,
     byDayOfWeek,
     topCategory,
     topSpendingDay: topDay,
+    maxSameCategoryInOneDay,
+    maxSameCategoryInOneDayCategory,
   };
 }
 
