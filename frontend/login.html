@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Login — PocketWise AI</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-hero">
+        <div class="brand">
+          <div class="brand-mark">💼</div>
+          <div>
+            <div class="brand-name">PocketWise <span>AI</span></div>
+            <div class="brand-tag">Your AI Financial Coach</div>
+          </div>
+        </div>
+        <h1>Welcome back 👋</h1>
+        <p>Login to continue managing your finances smartly.</p>
+      </div>
+
+      <div class="auth-body">
+        <div class="error-msg" id="error-box">Incorrect email or password. Try again.</div>
+
+        <form id="login-form">
+          <div class="field">
+            <label for="email">Email</label>
+            <div class="field-input">
+              <span class="field-icon">✉️</span>
+              <input type="email" id="email" placeholder="Enter your email" required />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="field-input">
+              <span class="field-icon">🔒</span>
+              <input type="password" id="password" placeholder="Enter your password" required />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <label><input type="checkbox" /> Remember me</label>
+            <a href="./forgot-password.html">Forgot password?</a>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">Login</button>
+        </form>
+
+        <div class="auth-foot">
+          Don't have an account? <a href="./sign-up.html">Sign up</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+const API_BASE =
+  'https://pocketwise-deployment-production.up.railway.app/api';
+  
+  const loginForm = document.getElementById('login-form');
+  const errorBox = document.getElementById('error-box');
+  const loginButton = loginForm.querySelector('button[type="submit"]');
+
+  loginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    errorBox.textContent = '';
+    errorBox.classList.remove('show');
+
+    loginButton.disabled = true;
+    loginButton.textContent = 'Logging in...';
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/auth/login`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      console.log("Login response:", data)
+
+      if (!response.ok) {
+        errorBox.textContent =
+          data.message || 'Incorrect email or password. Try again.';
+
+        errorBox.classList.add('show');
+        return;
+      }
+
+      if (!data.token || !data.user) {
+        errorBox.textContent =
+          'The server returned an incomplete login response.';
+
+        errorBox.classList.add('show');
+        return;
+      }
+
+      localStorage.setItem('pw_token', data.token);
+      localStorage.setItem(
+        'pw_user_name',
+        data.user.fullName || 'User'
+      );
+
+      window.location.href = 'dashboard.html';
+    } catch (error) {
+      console.error('Login error:', error);
+
+      errorBox.textContent =
+        'Could not reach the server. Check that the backend is running on port 5000.';
+
+      errorBox.classList.add('show');
+    } finally {
+      loginButton.disabled = false;
+      loginButton.textContent = 'Login';
+    }
+  });
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard — PocketWise AI</title>
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">💼</div>
+      <div>
+        <div class="brand-name">PocketWise <span style="color:#16a34a;">AI</span></div>
+        <div class="brand-tag">AI Financial Coach</div>
+      </div>
+    </div>
+
+    <nav class="nav-group">
+      <a href="#" class="nav-item active" data-view="dashboard"><span class="nav-icon">📊</span> Dashboard</a>
+      <a href="#" class="nav-item" data-view="transactions"><span class="nav-icon">📋</span> Transactions</a>
+      <a href="#" class="nav-item" data-view="analytics"><span class="nav-icon">📈</span> Analytics</a>
+      <a href="#" class="nav-item" data-view="ai-advice"><span class="nav-icon">🤖</span> AI Advice</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      Logged in as <strong id="sidebar-username">User</strong><br />
+      <a href="login.html" id="logout-link" style="color:#e0455b; font-weight:600;">Logout</a>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <h1 id="page-title">Dashboard</h1>
+        <p class="subtitle" id="page-subtitle">Here's your financial overview.</p>
+      </div>
+      <div class="user-chip">
+        <div class="user-avatar" id="avatar-initial">U</div>
+        <span id="topbar-username">User</span>
+      </div>
+    </div>
+
+    <!-- ================= DASHBOARD VIEW ================= -->
+    <section class="view active" id="view-dashboard">
+
+      <div class="stat-grid">
+        <div class="card stat-card">
+          <div class="stat-label">Total Income</div>
+          <div class="stat-value" id="stat-income">MK0</div>
+          <div class="stat-delta up">↑ this month</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Total Expenses</div>
+          <div class="stat-value" id="stat-expenses">MK0</div>
+          <div class="stat-delta down">↑ this month</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Current Balance</div>
+          <div class="stat-value" id="stat-balance">MK0</div>
+          <div class="stat-delta up">Updated now</div>
+        </div>
+        <div class="card stat-card">
+          <div class="stat-label">Savings Rate</div>
+          <div class="stat-value" id="stat-savings">0%</div>
+          <div class="stat-delta up">of income saved</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Spending Overview</h3>
+          <canvas id="categoryChart" height="220"></canvas>
+        </div>
+        <div class="card">
+          <h3>Recent Transactions</h3>
+          <div id="recent-tx-list"></div>
+        </div>
+      </div>
+
+      <div class="ai-banner">
+        <div>
+          <h3>Get AI Financial Advice</h3>
+          <p>Let our AI analyze your spending and give you personalized advice to improve your financial health.</p>
+        </div>
+        <button class="btn btn-primary" onclick="switchView('ai-advice')">Get Advice</button>
+      </div>
+    </section>
+
+    <!-- ================= TRANSACTIONS VIEW ================= -->
+    <section class="view" id="view-transactions">
+      <div class="grid-2" style="grid-template-columns: 1.4fr 1fr;">
+        <div class="card">
+          <h3>All Transactions</h3>
+          <div id="full-tx-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>Add Transaction</h3>
+          <form id="transaction-form" class="form-grid">
+            <div class="type-toggle">
+              <button type="button" class="active expense" data-type="expense">Expense</button>
+              <button type="button" class="income" data-type="income">Income</button>
+            </div>
+            <input type="hidden" id="tx-type" value="expense" />
+
+            <div class="field-plain">
+              <label for="amount">Amount (MK)</label>
+              <input type="number" id="amount" placeholder="Enter amount" required />
+            </div>
+
+            <div class="field-plain">
+              <label for="category">Category</label>
+              <select id="category">
+                <option>Food & Drinks</option>
+                <option>Transport</option>
+                <option>Accommodation</option>
+                <option>Education</option>
+                <option>Entertainment</option>
+                <option>Others</option>
+              </select>
+            </div>
+
+            <div class="field-plain">
+              <label for="description">Description (optional)</label>
+              <input type="text" id="description" placeholder="Add a note" />
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">Save Transaction</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ANALYTICS VIEW ================= -->
+    <section class="view" id="view-analytics">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Spending Trend</h3>
+          <canvas id="trendChart" height="220"></canvas>
+        </div>
+        <div class="card">
+          <h3>Top Categories</h3>
+          <div id="category-bars"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= AI ADVICE VIEW ================= -->
+    <section class="view" id="view-ai-advice">
+      <div class="ai-banner" style="align-items:flex-start; flex-direction:column; gap:6px;">
+        <div class="score-badge">💚 Financial Health Score: <span id="health-score">--/100</span></div>
+        <h3 style="margin-top:10px;">Your Financial Health</h3>
+        <p id="health-summary">Analyzing your spending...</p>
+      </div>
+
+      <div class="card">
+        <h3>Personalized Advice</h3>
+        <div id="ai-tips-list"></div>
+        <button class="btn btn-primary" style="margin-top:10px;" onclick="loadInsights()">↻ Get New Advice</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="./js/data.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>

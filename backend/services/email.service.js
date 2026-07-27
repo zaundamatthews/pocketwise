@@ -1,19 +1,19 @@
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-    service: 'Gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
+  service: "Gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 async function sendResetPasswordEmail(email, resetLink) {
-    const mailOptions = {
-        from: `Pocketwise AI <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: 'Password Reset Request',
+  const mailOptions = {
+    from: `Pocketwise AI <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: "Password Reset Request",
 
-        text: `
+    text: `
         You requested password reset for your Pocketwise AI account.
 
         Use the following link to reset your password.
@@ -24,7 +24,7 @@ async function sendResetPasswordEmail(email, resetLink) {
 
         If you did not request this reset, please ignore this email and your password will remain unchanged.
         `,
-        html: `
+    html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.6;">
             <h2>Pocketwise AI Password Reset Request </h2>
 
@@ -50,10 +50,10 @@ async function sendResetPasswordEmail(email, resetLink) {
            </a>
          </p>
         </div>
-        `
-    };
-    return transporter.sendMail(mailOptions);
+        `,
+  };
+  return transporter.sendMail(mailOptions);
 }
 module.exports = {
-    sendResetPasswordEmail
-}
+  sendResetPasswordEmail,
+};
